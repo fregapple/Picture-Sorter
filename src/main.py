@@ -5,7 +5,10 @@ from pygame_gui.elements import UIButton, UIStatusBar, UILabel
 from pygame_gui.windows import UIFileDialog
 
 
+"""
+    This is just a base class to define the window elements.
 
+"""
 class Window:
     def __init__(self):
         self.resolution = 800,600
@@ -17,17 +20,34 @@ class Window:
         pygame.display.set_caption('Picture Sorter')
 
 
+"""
+    This is the main class. Here we utilize pygame_gui to navigate and execute the script.
+
+"""
 class App:
     def __init__(self):
-        self.running = True
+        # This is the boolen for the runtime of the app.
+        self.running = True 
+        # This is the initial state that the gui will load at startup.
         self.state = 'first'
+        # This will load some gui specific items once so they don't cycle over and over.
         self.initized = False
+        # This will create a temp directory for the runtime of the app. It will be deleted on close.
         self.temp_dir()
+        # This is the variable used for the media files you have
         self.output = False
+        # This is the variable used for where you want the variables to go.
         self.input = False
+        # A boolean for the runtime to know when to start the install thread.
         self.installing = False
+        # This is a populated list of all mediafiles. This will help determine the percentage in which the 
+        #       progress bar will move.
         self.res = []
+        # This determines the folders in which already exists and / or need to be created for the files in
+                # self.res
         self.date_lists = []
+
+    #  The temp directory function
     def temp_dir(self):
         try:
             os.mkdir('./temp')
@@ -37,7 +57,8 @@ class App:
                 self.temp = './temp'
             except:
                 None
-
+        # This will search your system for all disk drives and then will create symlinks to them within the temp folder
+        # This is used for the file dialog as the landing page so you can access a USB easily.
         drivelist = subprocess.Popen('wmic logicaldisk get name,description', shell=True, stdout=subprocess.PIPE)
         drivelisto, err = drivelist.communicate()
         driveLines = str(drivelisto).split(':')
@@ -45,11 +66,12 @@ class App:
             if item[-1] == "'":
                 pass
             else: 
+                # creates the symlink Junctions
                 subprocess.check_call('mklink /J "%s" "%s"' % (f'./temp/{item[-1]}', f'{item[-1]}:/'), shell=True)
             
 
 
-
+    #  This defines what gui elements need to be on the screen during each self.state.
     def recreate_ui(self):
         self.manager.set_window_resolution(self.screen.resolution)
         
@@ -79,7 +101,8 @@ class App:
                                  "Reading files..",
                                  self.manager)
 
-    
+    # This will process all pygame events. In particular gui events. Some events still need to be run 
+    #   during the run function to avoid locking up.
     def process_events(self):
         
         for x in pygame.event.get():
@@ -87,6 +110,7 @@ class App:
                 temp = os.listdir('./temp')
                 for folder in temp:
                     print(folder)
+                    # Deletes the temp folder on close of the application.
                     os.removedirs(f'./temp/{folder}')
                 self.running = False
             
@@ -129,11 +153,13 @@ class App:
 
             self.manager.process_events(x)
 
+    # This reads the files in the selected directory as well as files in subdirectories.
     def file_reading(self): 
         for (dirpath, dir_names, files) in os.walk(self.outputPath):
             self.res.extend(os.path.join(dirpath, x) for x in files)
         self.list_enumerate()
 
+    # This then enumerates the date_lists list, which determines if there is already existing folders
     def list_enumerate(self):
         
         self.photo_folder = self.inputPath
@@ -142,6 +168,8 @@ class App:
                 self.date_lists.append(dirs)
         self.file_copy()
 
+    # This then starts the copying function. It will create folders within the directory chosen if 
+    #       the folder doesn't exist in date_lists
     def file_copy(self):
         self.title.text = 'Copying files..'
         self.title.rebuild()
@@ -149,13 +177,15 @@ class App:
         percent = 1/value
 
         path = os.getcwd()
-
+        # This adds the exiftool to the path, so then it is read by python and able to be executed.
+        #   This is only added for this runtime.
         os.environ['PATH'] += f';{path}\\data\\exiftool'
 
         with exiftool.ExifToolHelper() as et:
             metadata = et.get_metadata(self.res)
         for d in metadata:
             try:
+                # This is looking for image files and thier Date/Time/Origin
                 test = d["EXIF:DateTimeOriginal"]
                 if test[0:4] in self.date_lists:
                     shutil.copy(d["SourceFile"], f'{self.photo_folder}/{test[0:4]}')
@@ -165,14 +195,19 @@ class App:
                     shutil.copy(d["SourceFile"], f'{self.photo_folder}/{test[0:4]}')
             except:
                 try:
+                    # This is looking for video files and their Date/Time/Origin
                     test = d["QuickTime:CreateDate"]
                     if test[0:4] in self.date_lists:
+                        # In my tests, sometimes the video files have Origin date of 0000/00/00
+                        #   This will create a folder at 0000. This will skip those files and put them in the 
+                        #   unsorted folder instead
                         if test[0:4] == '0000':
                             shutil.copy(d["SourceFile"], f'{self.photo_folder}/unsorted')
 
                         else:
                             shutil.copy(d["SourceFile"], f'{self.photo_folder}/{test[0:4]}')
                     else:
+                        # This will make the folders if they don't exist in the date_lists
                         if test[0:4] == '0000':
                             try:
                                 os.makedirs(f'{self.photo_folder}/unsorted')
@@ -189,11 +224,15 @@ class App:
                         shutil.copy(d["SourceFile"], f'{self.photo_folder}/unsorted')
                     except:
                         shutil.copy(d["SourceFile"], f'{self.photo_folder}/unsorted')
+            # This is for the GUI so you can see the progress bar moving for each file sorted.
             self.progress_bar.percent_full += percent
             self.progress_bar.rebuild()
+        # Once the for loop has been completed, it will complete the progress bar. Just incase their is a 
+        #   disrepency in the information.
         self.progress_bar.percent_full = 1
         self.progress_bar.rebuild()
 
+    # This is the main runtime of the applicaton.
     def run(self):
         while self.running:
             if self.initized == False:
@@ -216,10 +255,11 @@ class App:
                                         ])
                 
                 self.recreate_ui()
-
-            self.clock = pygame.time.Clock()
-            self.time_delta_stack = deque([])
-            self.initized = True
+                # Determines fps of the application.
+                self.clock = pygame.time.Clock()
+                self.time_delta_stack = deque([])
+                self.initized = True
+                
             self.time_delta = self.clock.tick(240)/1000.0
 
             self.time_delta_stack.append(self.time_delta)
@@ -227,91 +267,28 @@ class App:
             if len(self.time_delta_stack) > 2000:
                 self.time_delta_stack.popleft()
 
+            # This will call all the GUI events
             self.process_events()
 
+            # This is an event that can't be in a seperate function as it will lock up.
+            # It will start a new thread so that the GUI can still function while information is being read.
             if self.installing == True:
                 if self.state == 'second':
                     t2 = threading.Thread(target=self.file_reading)
                     t2.start()
                     self.installing = False
-
+            
+            # Updates all the GUI specific elements.
             self.manager.update(self.time_delta)
 
+            # Blits the image / color to the background
             self.surface.blit(self.background_surface, (0, 0))
 
+            # This draws all the GUI elements to the window surface.
             self.manager.draw_ui(self.surface)
 
+            # Standard pygame display update.
             pygame.display.update()
-
-
-def test():
-    global res
-    res = []
-    
-
-    for (dirpath, dir_names, files) in os.walk(r'C:\Users\Sam\Downloads\iCloud Photos from Samuel Smollen\iCloud Photos from Samuel Smollen'):
-        res.extend(os.path.join(dirpath, x) for x in files)
-    # image = Image.open("C:\\Users\\Sam\\Downloads\\iCloud Photos from Samuel Smollen\\iCloud Photos from Samuel Smollen\\IMG_0026.JPG", 'r')
-    # exif = image.getexif()
-    # date_taken = exif.get(306)
-
-    # print(date_taken)
-
-def test2():
-    global res
-    path = os.getcwd()
-    photo_folder = Path('./photos')
-    if photo_folder.is_dir():
-        None
-    else:
-        os.makedirs('./photos')
-    os.environ['PATH'] += f';{path}\\data\\exiftool'
-    date_lists = []
-    with exiftool.ExifToolHelper() as et:
-        metadata = et.get_metadata(res)
-    for d in metadata:
-        try:
-            test = d["EXIF:DateTimeOriginal"]
-            if test[0:4] in date_lists:
-                shutil.copy(d["SourceFile"], f'./{photo_folder}/{test[0:4]}')
-            else:
-                date_lists.append(test[0:4])
-                os.makedirs(f'./{photo_folder}/{test[0:4]}')
-                shutil.copy(d["SourceFile"], f'./{photo_folder}/{test[0:4]}')
-        except:
-            try:
-                test = d["QuickTime:CreateDate"]
-                if test[0:4] in date_lists:
-                    if test[0:4] == '0000':
-                        shutil.copy(d["SourceFile"], f'./{photo_folder}/unsorted')
-
-                    else:
-                        shutil.copy(d["SourceFile"], f'./{photo_folder}/{test[0:4]}')
-                else:
-                    if test[0:4] == '0000':
-                        try:
-                            os.makedirs(f'./{photo_folder}/unsorted')
-                            shutil.copy(d["SourceFile"], f'./{photo_folder}/unsorted')
-                        except:
-                            shutil.copy(d["SourceFile"], f'./{photo_folder}/unsorted')
-                    else:        
-                        date_lists.append(test[0:4])
-                        os.makedirs(f'./{photo_folder}/{test[0:4]}')
-                        shutil.copy(d["SourceFile"], f'./{photo_folder}/{test[0:4]}')
-            except:
-                try:
-                    os.makedirs(f'./{photo_folder}/unsorted')
-                    shutil.copy(d["SourceFile"], f'./{photo_folder}/unsorted')
-                except:
-                    shutil.copy(d["SourceFile"], f'./{photo_folder}/unsorted')
-
-
-
-def test3():
-    global data_lists
-    for dirs in os.listdir(r'C:\Users\Sam\Desktop\Python_Stuff\Under-Contruction\Picture Sorter\photos'):
-        if len(dirs) == 4:
-            data_lists.append(dirs)
 
 
 if __name__ == '__main__':
