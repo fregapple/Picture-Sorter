@@ -15,4 +15,4 @@
  Any media file that doesn't have the exif data on it's date, will be saved to the 'unsorted' folder in the directory you chose.
  
  
- This sorce also includes Exiftools from `https://github.com/exiftool/exiftool`
+ This sorce also includes Exiftools from `https://github.com/exiftool/exiftool`.
